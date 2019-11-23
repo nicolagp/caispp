@@ -21,7 +21,7 @@ from keras import applications
 from keras.preprocessing.image import ImageDataGenerator 
 from keras import optimizers
 from keras.models import Sequential,Model,load_model
-from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D,GlobalAveragePooling2D
+from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D,GlobalAveragePooling2D, BatchNormalization
 from keras.callbacks import TensorBoard,ReduceLROnPlateau,ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from tensorflow.python.client import device_lib
@@ -32,19 +32,21 @@ fpP = "../data/Parasitized/"
 fpU = "../data/Uninfected/"
 
 #load images
+img_height,img_width = 192,192 
+
 dataP = []
 num_imgs = 50
 print("Loading {} parasitized cell images".format(num_imgs))
 for filename in os.listdir(fpP)[:num_imgs]:
         if '.png' in filename:
-            dataP.append(resize(mpimg.imread(fpP+filename), (199,199,3)))
+            dataP.append(resize(mpimg.imread(fpP+filename), (img_height,img_width,3)))
 
 dataU = []
 num_imgs = 50
 print("Loading {} unparasitized cell images".format(num_imgs))
 for filename in os.listdir(fpU)[:num_imgs]:
     if '.png' in filename:
-        dataU.append(resize(mpimg.imread(fpU+filename), (199, 199, 3)))
+        dataU.append(resize(mpimg.imread(fpU+filename), (img_height, img_width, 3)))
         
         
 dataP = np.array(dataP)
@@ -55,7 +57,7 @@ p = np.ones(dataP.shape[0])
 u = np.zeros(dataU.shape[0])
 X = np.concatenate((dataP, dataU))
 y = np.concatenate((p, u))
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, shuffle=True)
 
 # Normalize image vectors
 X_train = X_train/255.
@@ -68,7 +70,7 @@ print ("y_train shape: " + str(y_train.shape))
 print ("X_test shape: " + str(X_test.shape))
 print ("y_test shape: " + str(y_test.shape))
 
-img_height,img_width = 199,199 
+
 num_classes = 1
 #If imagenet weights are being loaded, 
 #input must have a static square shape (one of (128, 128), (160, 160), (192, 192), or (224, 224))
@@ -78,15 +80,16 @@ base_model = applications.resnet50.ResNet50(weights= None,
 
 x = base_model.output
 x = GlobalAveragePooling2D()(x)
-x = Dropout(0.7)(x)
-predictions = Dense(num_classes, activation= 'softmax')(x)
+x = Dropout(0.2)(x)
+x = BatchNormalization()(x)
+predictions = Dense(num_classes, activation= 'sigmoid')(x)
 model = Model(inputs = base_model.input, outputs = predictions)
 
 from keras.optimizers import SGD, Adam
 sgd = SGD(lr=0.5, nesterov=False)
-adam = Adam(lr=0.0001)
+adam = Adam(lr=0.01)
 print("Compiling...")
-model.compile(optimizer= sgd, loss='binary_crossentropy', metrics=['accuracy'])
+model.compile(optimizer= adam, loss='binary_crossentropy', metrics=['accuracy'])
 print("Fitting...")
 model.fit(X_train, y_train, epochs = 50, batch_size = 64)
 
@@ -95,7 +98,7 @@ print ("Loss = " + str(preds[0]))
 print ("Test Accuracy = " + str(preds[1]))
 summary = model.summary()
 with open("summary.txt", 'w') as file:
-    file.write(summary)
+    file.write(str(summary))
 print (summary)
 
 
